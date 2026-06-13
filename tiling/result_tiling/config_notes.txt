@@ -1,0 +1,37 @@
+=== TILING BENCHMARK CONFIG ===
+PE Array Fixed: 16x16
+Data Width: 32 bits
+Frequency: 200.0 MHz
+
+
+--- WORKLOAD: C=16_H=8_W=8 ---
+[V1 Output Stationary]
+SRAM: 7.88 KB | Cycles: 6138 | Compute: 54 | Load time(cycles): 6048
+[V2 Weight Stationary]
+SRAM: 8.16 KB | Cycles: 5418 | Compute: 54 | Load time(cycles): 5328
+[V3 WS + Line Buffer]
+SRAM: 11.16 KB | Cycles: 1258 | Compute: 54 | Load time(cycles): 1168
+
+--- WORKLOAD: C=16_H=16_W=16 ---
+[V1 Output Stationary]
+SRAM: 7.88 KB | Cycles: 14434 | Compute: 126 | Load time(cycles): 14112
+[V2 Weight Stationary]
+SRAM: 9.41 KB | Cycles: 12562 | Compute: 126 | Load time(cycles): 12240
+[V3 WS + Line Buffer]
+SRAM: 15.41 KB | Cycles: 4562 | Compute: 126 | Load time(cycles): 4240
+
+--- WORKLOAD: C=32_H=8_W=8 ---
+[V1 Output Stationary]
+SRAM: 7.88 KB | Cycles: 12186 | Compute: 108 | Load time(cycles): 12096
+[V2 Weight Stationary]
+SRAM: 8.16 KB | Cycles: 10746 | Compute: 108 | Load time(cycles): 10656
+[V3 WS + Line Buffer]
+SRAM: 11.16 KB | Cycles: 2426 | Compute: 108 | Load time(cycles): 2336
+
+--- WORKLOAD: C=32_H=16_W=16 ---
+[V1 Output Stationary]
+SRAM: 7.88 KB | Cycles: 28546 | Compute: 252 | Load time(cycles): 28224
+[V2 Weight Stationary]
+SRAM: 9.41 KB | Cycles: 24802 | Compute: 252 | Load time(cycles): 24480
+[V3 WS + Line Buffer]
+SRAM: 15.41 KB | Cycles: 8802 | Compute: 252 | Load time(cycles): 8480

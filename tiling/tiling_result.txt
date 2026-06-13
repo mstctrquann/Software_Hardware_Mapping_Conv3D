@@ -1,0 +1,14 @@
+[DATA] Generating random data for Conv3D...
+[INIT] Required SRAM: 87.75 KB / MAX: 64.0 KB
+⚠️ CẢNH BÁO: Tiling size vượt quá dung lượng SRAM on-chip!
+[TILING] Chạy mô phỏng Tiling Z=4, C=32
+[TILING] Hoàn thành trong 3.3325s
+[SW BASELINE] Bắt đầu tính toán Conv3D thuần túy...
+==================================================
+  [SW BASELINE] REPORT
+==================================================
+Thời gian chạy:      0.1588s
+Kích thước Output:   (1, 14, 30, 30)
+Tổng số phép MAC:    21,772,800
+==================================================
+✅ TILING Match!

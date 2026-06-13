@@ -1,0 +1,44 @@
+[DATA] Generating random data for Conv3D...
+[OS] Bắt đầu mô phỏng Output Stationary cho Conv3D...
+[OS] Hoàn thành trong 0.0372s
+[SW BASELINE] Bắt đầu tính toán Conv3D thuần túy...
+==================================================
+  [SW BASELINE] REPORT
+==================================================
+Thời gian chạy:      0.0122s
+Kích thước Output:   (1, 6, 14, 14)
+Tổng số phép MAC:    1,016,064
+==================================================
+
+======================================================================
+  PERFORMANCE REPORT - OUTPUT STATIONARY (OS)
+======================================================================
+
+[COMPUTE METRICS]
+  Total MACs:       1,016,064
+  Compute Cycles:   4,536
+  PE Utilization:   87.5%
+  MACs/Cycle:       2.20
+
+[LOAD METRICS]
+  DRAM W Reads:     72,576
+  DRAM In Reads:    387,072
+  SRAM W Reads:     1,016,064
+  SRAM In Reads:    1,016,064
+
+[STORE METRICS]
+  PSum SRAM/DRAM Rd:0
+  PSum SRAM/DRAM Wr:1,176
+  DRAM Out Writes:  1,176
+
+[REUSE METRICS]
+  Weight Reuse:     14.00
+  Input Reuse:      2.62
+  Output Reuse:     432.00
+
+[CYCLES COMPARISON]
+  Total Cycles:     460,824
+  Stall Cycles:     455,112
+======================================================================
+
+✅ OS Match!

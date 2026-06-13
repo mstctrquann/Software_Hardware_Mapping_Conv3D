@@ -1,0 +1,12 @@
+[DATA] Generating random data for Conv3D...
+[WS] Bắt đầu mô phỏng Weight Stationary cho Conv3D...
+[WS] Hoàn thành trong 0.0382s
+[SW BASELINE] Bắt đầu tính toán Conv3D thuần túy...
+==================================================
+  [SW BASELINE] REPORT
+==================================================
+Thời gian chạy:      0.0110s
+Kích thước Output:   (1, 6, 14, 14)
+Tổng số phép MAC:    1,016,064
+==================================================
+✅ WS Match!

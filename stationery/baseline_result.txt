@@ -1,0 +1,44 @@
+[DATA] Generating random data for Conv3D...
+[BASELINE] Bắt đầu mô phỏng Baseline (No Stationary) cho Conv3D...
+[BASELINE] Hoàn thành trong 0.0390s
+[SW BASELINE] Bắt đầu tính toán Conv3D thuần túy...
+==================================================
+  [SW BASELINE] REPORT
+==================================================
+Thời gian chạy:      0.0114s
+Kích thước Output:   (1, 6, 14, 14)
+Tổng số phép MAC:    1,016,064
+==================================================
+
+======================================================================
+  PERFORMANCE REPORT - BASELINE (NO STATIONARY)
+======================================================================
+
+[COMPUTE METRICS]
+  Total MACs:       1,016,064
+  Compute Cycles:   4,536
+  PE Utilization:   87.5%
+  MACs/Cycle:       2.19
+
+[LOAD METRICS]
+  DRAM W Reads:     72,576
+  DRAM In Reads:    387,072
+  SRAM W Reads:     1,016,064
+  SRAM In Reads:    1,016,064
+
+[STORE METRICS]
+  PSum SRAM/DRAM Rd:1,017,240
+  PSum SRAM/DRAM Wr:1,018,416
+  DRAM Out Writes:  1,176
+
+[REUSE METRICS]
+  Weight Reuse:     14.00
+  Input Reuse:      2.62
+  Output Reuse:     0.50
+
+[CYCLES COMPARISON]
+  Total Cycles:     463,176
+  Stall Cycles:     456,288
+======================================================================
+
+✅ BASELINE Match!

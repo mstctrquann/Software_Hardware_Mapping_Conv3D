@@ -1,0 +1,15 @@
+=== CONVOLUTION BLOCK BENCHMARK CONFIG ===
+Input Shape (C, H, W): (128, 32, 32)
+Weight Shape (K, C, R, S): (1, 128, 3, 3)
+Data Width: 32 bits
+Frequency: 200.0 MHz
+
+
+--- TILING CONFIG: PE_ROWS=16, PE_COLS=16 ---
+
+[V1 Output Stationary]
+SRAM: 7.88 KB | Cycles: 485280 | Compute: 4320 | Load time(cycles): 483840
+[V2 Weight Stationary]
+SRAM: 11.39 KB | Cycles: 420084 | Compute: 4320 | Load time(cycles): 415872
+[V3 WS + Line Buffer]
+SRAM: 17.39 KB | Cycles: 136436 | Compute: 4320 | Load time(cycles): 132224

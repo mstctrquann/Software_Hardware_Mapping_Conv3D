@@ -169,215 +169,163 @@ class HardwareAccelerator:
         # Compute unit
         self.core = ComputeCore(config)
         
-        # Performance metrics (IMPROVED - More detailed!)
+        # Performance metrics
         self.stats = {
-            # Timing
             "cycles": 0,
-            # Breakdown by pipeline stage
-            "prologue_cycles": 0,     # Load only
-            "steady_cycles": 0,       # Overlapped load+compute
-            "epilogue_cycles": 0,     # Compute only
-            "writeback_cycles": 0,    # Output writes
-
-            # Component cycles
-            "compute_cycles": 0,      # Total compute time
-            "load_cycles": 0,         # Total load time
-            "stall_cycles": 0,        # PE idle time = load - compute
-            
-            # DRAM traffic (total)
+            "prologue_cycles": 0,     
+            "steady_cycles": 0,       
+            "epilogue_cycles": 0,     
+            "writeback_cycles": 0,    
+            "compute_cycles": 0,      
+            "load_cycles": 0,         
+            "stall_cycles": 0,        
             "dram_words": 0,
-            
-            # DRAM traffic breakdown by type
             "weight_dram_words": 0,
             "input_dram_words": 0,
             "output_dram_words": 0,
-            
-            # Access counts => số lần ghi, đọc từ DRAM
             "weight_loads": 0,
             "input_loads": 0,
             "output_writes": 0,
         }
 
-    def run(self, dram_in, dram_w):
-        """
-        Main execution loop.
-        Dataflow: Output Stationary với 3-stage pipeline.
-        """
+    def load_weight(self, dram_w, c_start, verbose=False):
+        # [TILING CONFIG] Lấy 1 khối Weight Tile tương ứng với 16 Channels
+        w_slice = dram_w[0, c_start:c_start+16, :, :]
+        self.w_sram.write_from_dram(w_slice)
+        
+        t_load = w_slice.size * self.cfg.CYCLE_DRAM_RD
+        self.stats['dram_words'] += w_slice.size
+        self.stats['weight_dram_words'] += w_slice.size
+        self.stats['weight_loads'] += 1
+        
+        if verbose:
+            print(f"    [LOAD WEIGHT] Kênh {c_start}-{c_start+15}. Shape: {w_slice.shape}, Words: {w_slice.size}, Bus Cycles: {t_load}")
+        return t_load
+
+    def load_input(self, dram_in, c_start, h_start, h_end, width_start, width_end, verbose=False):
+        in_slice_padded = np.zeros(
+            (16, self.cfg.R, self.cfg.PE_COLS + self.cfg.S - 1), 
+            dtype=np.int32
+        )
+        # [TILING CONFIG] Lấy 1 khối Input Tile cắt theo C (16 kênh), Height và Width
+        actual_data = dram_in[c_start:c_start+16, h_start:h_end, width_start:width_end]
+        in_slice_padded[:, :actual_data.shape[1], :actual_data.shape[2]] = actual_data
+        
+        self.in_sram.write_from_dram(in_slice_padded)
+        
+        t_load = in_slice_padded.size * self.cfg.CYCLE_DRAM_RD
+        self.stats['dram_words'] += in_slice_padded.size
+        self.stats['input_dram_words'] += in_slice_padded.size
+        self.stats['input_loads'] += 1
+        
+        if verbose:
+            print(f"    [LOAD INPUT] Vị trí H:{h_start}-{h_end}, W:{width_start}-{width_end}. Shape: {in_slice_padded.shape}, Words: {in_slice_padded.size}, Bus Cycles: {t_load}")
+        return t_load
+
+    def compute(self, verbose=False):
+        curr_w = self.w_sram.read_to_pe()
+        curr_in = self.in_sram.read_to_pe()
+        
+        t_compute = self.cfg.R * self.cfg.S * self.cfg.CYCLE_MAC
+        self.stats['compute_cycles'] += t_compute
+        
+        self.core.execute_cycle_accurate(curr_w, curr_in)
+        if verbose:
+            print(f"    [COMPUTE] MAC window {self.cfg.R}x{self.cfg.S}. PE Cycles: {t_compute}")
+        return t_compute
+
+    def store(self, dram_out, oh, ow_tile, valid_width, verbose=False):
+        output_row_vals = self.core.adder_tree_reduction_structural()
+        dram_out[oh, ow_tile:ow_tile + valid_width] = output_row_vals[:valid_width]
+        
+        t_write = valid_width * self.cfg.CYCLE_DRAM_RD
+        self.stats['dram_words'] += valid_width
+        self.stats['output_dram_words'] += valid_width
+        self.stats['output_writes'] += 1
+        
+        if verbose:
+            print(f"    [STORE] Ghi kết quả ra DRAM. Valid width: {valid_width}, Words: {valid_width}, Bus Cycles: {t_write}")
+        return t_write
+
+    def run(self, dram_in, dram_w, verbose=False):
         print(f"[V1] Starting Output Stationary simulation...")
         start_time = time.time()
         
-        # Derived dimensions
-        H_out = self.cfg.H - self.cfg.R + 1  # 30
-        W_out = self.cfg.W - self.cfg.S + 1  # 30
+        H_out = self.cfg.H - self.cfg.R + 1  
+        W_out = self.cfg.W - self.cfg.S + 1  
         dram_out = np.zeros((H_out, W_out), dtype=np.int32)
+        # [TILING CONFIG] Cắt Channel (C) thành các phần bằng đúng số lượng PE_ROWS (16)
+        num_ch_tiles = self.cfg.C // self.cfg.PE_ROWS  
         
-        num_ch_tiles = self.cfg.C // self.cfg.PE_ROWS  # 8 tiles
-        
-        # ==========================================
-        # DATAFLOW: Output Stationary
-        # Loop order: Output Height → Output Width → Channels
-        # ==========================================
-        
+        first_tile_printed = False
+
+        # [TILING CONFIG] Quét Output Height (hàng)
         for oh in range(H_out):
+            # [TILING CONFIG] Cắt Output Width (W) thành các phần bằng đúng số lượng PE_COLS (16)
             for ow_tile in range(0, W_out, self.cfg.PE_COLS):
                 
-                # Reset accumulators cho output tile mới
                 self.core.reset_accumulators()
                 
-                # ==========================================
-                # STAGE 1: PROLOGUE - Load first tile
-                # ==========================================
+                is_verbose = verbose and not first_tile_printed
+                if is_verbose:
+                    print(f"\n--- [DEMO 1 TILE] Tính toán Output Tile: oh={oh}, ow_tile={ow_tile} ---")
                 
-                # Load weight tile 0
-                w_slice = dram_w[0, 0:16, :, :]
+                if is_verbose: print("  > STAGE 1: PROLOGUE (DMA nạp dữ liệu khởi đầu)")
+                t_load_w = self.load_weight(dram_w, 0, verbose=is_verbose)
                 
-                # Load input tile 0 với zero padding
-                h_start, h_end = oh, oh + self.cfg.R
-                width_start = ow_tile
-                width_end = min(
-                    ow_tile + self.cfg.PE_COLS + self.cfg.S - 1, 
-                    self.cfg.W
-                )
+                width_end = min(ow_tile + self.cfg.PE_COLS + self.cfg.S - 1, self.cfg.W)
+                t_load_in = self.load_input(dram_in, 0, oh, oh + self.cfg.R, ow_tile, width_end, verbose=is_verbose)
                 
-                # Khởi tạo in_slice toàn số 0 với kích thước chuẩn (16, 3, 18) để tránh trường hợp không đủ 18ptu ở rìa
-                in_slice_padded = np.zeros(
-                    (16, self.cfg.R, self.cfg.PE_COLS + self.cfg.S - 1), 
-                    dtype=np.int32
-                )
-                # Lấy dữ liệu thực tế từ DRAM (có thể chỉ được 16 hoặc ít hơn)
-                actual_data = dram_in[0:16, h_start:h_end, width_start:width_end]
-
-                # Chép dữ liệu thực tế vào đầu mảng in_slice_padded
-                # Những phần thiếu ở cuối sẽ giữ nguyên là 0 (đúng Zero Padding)
-                in_slice_padded[:, :actual_data.shape[1], :actual_data.shape[2]] = actual_data
-                
-                # DMA write to SRAM
-                self.w_sram.write_from_dram(w_slice)
-                self.in_sram.write_from_dram(in_slice_padded)
-                
-                # Tính Cycle Load ban đầu (Stall hoàn toàn)
-                # Do chỉ nạp data từ DRAM và các PE k tính toán => latency được cộng thẳng
-                t_prologue = (w_slice.size + in_slice_padded.size) * self.cfg.CYCLE_DRAM_RD
+                t_prologue = t_load_w + t_load_in
                 self.stats['prologue_cycles'] += t_prologue
                 self.stats['cycles'] += t_prologue
                 self.stats['load_cycles'] += t_prologue
-
-                self.stats['dram_words'] += (w_slice.size + in_slice_padded.size)
                 
-                # Track breakdown
-                self.stats['weight_dram_words'] += w_slice.size
-                self.stats['input_dram_words'] += in_slice_padded.size
-                self.stats['weight_loads'] += 1
-                self.stats['input_loads'] += 1
-                
-                # Hoàn thành nạp dữ liệu cho tile 0 => Swap để đưa Tile 0 vào Compute Bank để bắt đầu tính toán
                 self.w_sram.swap()
                 self.in_sram.swap()
                 
-                # ==========================================
-                # STAGE 2: STEADY STATE - Pipeline compute/load
-                # ==========================================
-                
+                if is_verbose: print("  > STAGE 2: STEADY STATE (Pipeline Compute và Load song song)")
                 for k in range(num_ch_tiles - 1):
-                    # A. COMPUTE với tile hiện tại
-                    curr_w = self.w_sram.read_to_pe()
-                    curr_in = self.in_sram.read_to_pe()
+                    t_compute = self.compute(verbose=is_verbose)
                     
-                    # Compute time
-                    t_compute = self.cfg.R * self.cfg.S * self.cfg.CYCLE_MAC
-                    
-                    # B. LOAD tile tiếp theo (song song với compute)
                     next_k = k + 1
                     c_start = next_k * self.cfg.PE_ROWS
                     
-                    # Load next weight tile
-                    w_next = dram_w[0, c_start:c_start+16, :, :]
+                    if is_verbose: print(f"    (Song song nạp tile tiếp theo k={next_k})")
+                    t_load_w = self.load_weight(dram_w, c_start, verbose=is_verbose)
+                    t_load_in = self.load_input(dram_in, c_start, oh, oh + self.cfg.R, ow_tile, width_end, verbose=is_verbose)
+                    t_load = t_load_w + t_load_in
                     
-                    # Load next input tile
-                    in_next_padded = np.zeros(
-                        (16, self.cfg.R, self.cfg.PE_COLS + self.cfg.S - 1), 
-                        dtype=np.int32
-                    )
-                    actual_data_in = dram_in[
-                        c_start:c_start+16, 
-                        h_start:h_end, 
-                        width_start:width_end
-                    ]
-                    in_next_padded[:, :actual_data_in.shape[1], :actual_data_in.shape[2]] = actual_data_in
-                    
-                    # DMA write
-                    self.w_sram.write_from_dram(w_next)
-                    self.in_sram.write_from_dram(in_next_padded)
-                    
-                    # Load time
-                    t_load = (w_next.size + in_next_padded.size) * self.cfg.CYCLE_DRAM_RD
-                    
-                    # Track metrics
-                    self.stats['dram_words'] += (w_next.size + in_next_padded.size)
-                    self.stats['weight_dram_words'] += w_next.size
-                    self.stats['input_dram_words'] += in_next_padded.size
-                    self.stats['weight_loads'] += 1
-                    self.stats['input_loads'] += 1
-                    
-                    # C. LATENCY HIDING - Pipeline barrier
                     t_steady_step = max(t_compute, t_load)
                     t_stall = max(0, t_load - t_compute)
                     
                     self.stats['steady_cycles'] += t_steady_step     
                     self.stats['cycles'] += t_steady_step
-                    self.stats['compute_cycles'] += t_compute
                     self.stats['load_cycles'] += t_load             
                     self.stats['stall_cycles'] += t_stall
                     
-                    # Perform computation (functional simulation)
-                    self.core.execute_cycle_accurate(curr_w, curr_in)
-                    
-                    # Swap banks
                     self.w_sram.swap()
                     self.in_sram.swap()
                 
-                # ==========================================
-                # STAGE 3: EPILOGUE - Compute last tile
-                # ==========================================
-                
-                curr_w = self.w_sram.read_to_pe()
-                curr_in = self.in_sram.read_to_pe()
-                
-                # Epilogue
-                t_epilogue = self.cfg.R * self.cfg.S * self.cfg.CYCLE_MAC
-
+                if is_verbose: print("  > STAGE 3: EPILOGUE (Compute tile cuối)")
+                t_epilogue = self.compute(verbose=is_verbose)
                 self.stats['epilogue_cycles'] += t_epilogue  
                 self.stats['cycles'] += t_epilogue
-                self.stats['compute_cycles'] += t_epilogue
-
-                self.core.execute_cycle_accurate(curr_w, curr_in)
                 
-                # ==========================================
-                # WRITE BACK - Reduction và ghi DRAM
-                # ==========================================
+                if is_verbose: print("  > STAGE 4: WRITE BACK (Ghi kết quả)")
+                valid_width = min(self.cfg.PE_COLS, W_out - ow_tile)
+                t_write = self.store(dram_out, oh, ow_tile, valid_width, verbose=is_verbose)
                 
-                # Adder tree reduction: 16 channels → 1 output row
-                output_row_vals = self.core.adder_tree_reduction_structural()
-                
-                # Ghi ra DRAM
-                valid_width = min(self.cfg.PE_COLS, W_out - ow_tile) #W_out - ow_tile:số ptu còn lại nếu k đủ 16ptu để ghi
-                dram_out[oh, ow_tile:ow_tile + valid_width] = output_row_vals[:valid_width]
-
-                # Writeback
-                t_write = valid_width * self.cfg.CYCLE_DRAM_RD
-
                 self.stats['writeback_cycles'] += t_write  
                 self.stats['cycles'] += t_write
-                self.stats['dram_words'] += valid_width
-                self.stats['output_dram_words'] += valid_width
-                self.stats['output_writes'] += 1
+                
+                first_tile_printed = True
         
         end_time = time.time()
         self.stats['runtime_seconds'] = end_time - start_time
         print(f"[V1] Finished in {end_time - start_time:.4f}s")
         
         return dram_out, self.stats
-
 # ==========================================
 # UTILITIES
 # ==========================================
@@ -574,7 +522,7 @@ if __name__ == "__main__":
     accel = HardwareAccelerator(cfg)
     
     # Run simulation
-    hw_out, stats = accel.run(d_in, d_w)
+    hw_out, stats = accel.run(d_in, d_w, verbose=True)
     
     # Print report
     print_performance_report(stats, cfg)

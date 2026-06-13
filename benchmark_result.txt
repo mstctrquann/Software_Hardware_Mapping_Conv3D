@@ -1,0 +1,66 @@
+====================================================================================================
+  BENCHMARKING CONV3D SIMULATORS (DATAFLOW EXPLORATION)
+====================================================================================================
+[DATA] Generating random data for Conv3D...
+[BASELINE] Bắt đầu mô phỏng Baseline (No Stationary) cho Conv3D...
+[BASELINE] Hoàn thành trong 0.7704s
+[OS] Bắt đầu mô phỏng Output Stationary cho Conv3D...
+[OS] Hoàn thành trong 0.7675s
+[WS] Bắt đầu mô phỏng Weight Stationary cho Conv3D...
+[WS] Hoàn thành trong 0.7674s
+[IS] Bắt đầu mô phỏng Input Stationary cho Conv3D...
+[IS] Hoàn thành trong 0.7696s
+[INIT] Required SRAM: 70.88 KB / MAX: 64.0 KB
+⚠️ CẢNH BÁO: Tiling size vượt quá dung lượng SRAM on-chip!
+[TILING] Chạy mô phỏng Tiling Z=8, C=16
+[TILING] Hoàn thành trong 6.3175s
+
+========================================================================================================================
+Dataflow                  | Total MACs      | Compute Cycles  | PE Utilization  | MACs/Cycle     
+------------------------------------------------------------------------------------------------------------------------
+Baseline (No Stationary)  | 21,772,800      | 90,720          | 93.8%           | 2.23           
+Weight Stationary (WS)    | 21,772,800      | 90,720          | 93.8%           | 2.62           
+Input Stationary (IS)     | 21,772,800      | 90,720          | 93.8%           | 2.23           
+Output Stationary (OS)    | 21,772,800      | 90,720          | 93.8%           | 2.25           
+Tiling OS (Z=8, C=16)     | 21,772,800      | 1,451,520       | 5.9%            | 5.51           
+========================================================================================================================
+
+[LOAD METRICS]
+Dataflow                  | DRAM W Reads    | DRAM In Reads   | SRAM W Reads    | SRAM In Reads  
+------------------------------------------------------------------------------------------------------------------------
+Baseline (No Stationary)  | 1,451,520       | 8,225,280       | 21,772,800      | 21,772,800     
+Weight Stationary (WS)    | 1,728           | 8,225,280       | 1,728           | 21,772,800     
+Input Stationary (IS)     | 1,451,520       | 8,225,280       | 21,772,800      | 8,225,280      
+Output Stationary (OS)    | 1,451,520       | 8,225,280       | 21,772,800      | 21,772,800     
+Tiling OS (Z=8, C=16)     | 207,360         | 3,732,480       | 21,772,800      | 21,772,800     
+========================================================================================================================
+
+[STORE METRICS]
+Dataflow                  | PSum SRAM/DRAM Rd    | PSum SRAM/DRAM Wr    | DRAM Out Writes
+------------------------------------------------------------------------------------------------------------------------
+Baseline (No Stationary)  | 21,810,600           | 21,823,200           | 12,600         
+Weight Stationary (WS)    | 37,800               | 50,400               | 12,600         
+Input Stationary (IS)     | 37,800               | 50,400               | 12,600         
+Output Stationary (OS)    | 0                    | 12,600               | 12,600         
+Tiling OS (Z=8, C=16)     | 0                    | 12,600               | 12,600         
+========================================================================================================================
+
+[REUSE METRICS]
+Dataflow                  | Weight Reuse    | Input Reuse     | Output/PSum Reuse 
+------------------------------------------------------------------------------------------------------------------------
+Baseline (No Stationary)  | 15.00           | 2.65            | 0.50              
+Weight Stationary (WS)    | 12600.00        | 2.65            | 216.00            
+Input Stationary (IS)     | 15.00           | 2.65            | 216.00            
+Output Stationary (OS)    | 15.00           | 2.65            | 864.00            
+Tiling OS (Z=8, C=16)     | 105.00          | 5.83            | 864.00            
+========================================================================================================================
+
+[CYCLES COMPARISON]
+Dataflow                  | Total Cycles    | Compute Cycles  | Stall Cycles   
+------------------------------------------------------------------------------------------------------------------------
+Baseline (No Stationary)  | 9,765,000       | 90,720          | 9,623,880      
+Weight Stationary (WS)    | 8,315,208       | 90,720          | 8,174,088      
+Input Stationary (IS)     | 9,765,000       | 90,720          | 9,623,880      
+Output Stationary (OS)    | 9,689,400       | 90,720          | 9,586,080      
+Tiling OS (Z=8, C=16)     | 3,952,440       | 1,451,520       | 2,488,320      
+========================================================================================================================
