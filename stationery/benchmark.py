@@ -2,6 +2,7 @@ import os
 import sys
 import io
 import time
+import csv
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -49,6 +50,53 @@ def plot_metric(labels, values, title, ylabel, filepath, format_str='%.2e'):
     plt.tight_layout()
     plt.savefig(filepath, dpi=150)
     plt.close()
+
+def save_survey_results(labels, stats, filepath, cfg):
+    with open(filepath, 'w', encoding='utf-8', newline='') as f:
+        writer = csv.writer(f)
+        headers = [
+            "Dataflow",
+            "Total Load Calls",
+            "Weight Load Calls",
+            "Input Load Calls",
+            "Psum Load Calls",
+            "Total MACs",
+            "Compute Cycles",
+            "Stall Cycles",
+            "PE Utilization (%)",
+            "Total Store Calls",
+            "Psum Store Calls",
+            "Output Store Calls"
+        ]
+        writer.writerow(headers)
+        
+        for label, s in zip(labels, stats):
+            total_load = s.dram_weight_reads + s.dram_input_reads
+            weight_load = s.dram_weight_reads
+            input_load = s.dram_input_reads
+            psum_load = s.partial_sum_reads
+            total_macs = s.total_mac
+            comp_cycles = s.compute_cycles
+            stall_cycles = s.stall_cycles
+            pe_util = s.pe_utilization(cfg.PE_ROWS, cfg.PE_COLS) * 100
+            total_store = s.partial_sum_writes + s.dram_output_writes
+            psum_store = s.partial_sum_writes
+            out_store = s.dram_output_writes
+            
+            writer.writerow([
+                label,
+                total_load,
+                weight_load,
+                input_load,
+                psum_load,
+                total_macs,
+                comp_cycles,
+                stall_cycles,
+                f"{pe_util:.2f}",
+                total_store,
+                psum_store,
+                out_store
+            ])
 
 def main():
     print("[BENCHMARK 2D] Starting Conv2D Dataflow Comparison...")
@@ -137,7 +185,12 @@ def main():
     v_ro = [s.output_reuse_factor() for s in stats]
     plot_metric(labels, v_ro, "Output/Psum Reuse Factor", "MACs / Traffic", os.path.join(dirs["reuse"], "output_reuse_factor.png"), "%.1f")
 
+    # Save CSV survey
+    csv_path = os.path.join(base_dir, "survey_results.csv")
+    save_survey_results(labels, stats, csv_path, cfg)
+
     print("[BENCHMARK 2D] All plots saved successfully in subfolders: compute, load, store, reuse.")
+    print(f"[BENCHMARK 2D] Custom survey metrics saved to: {csv_path}")
 
 if __name__ == "__main__":
     main()
