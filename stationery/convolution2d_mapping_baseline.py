@@ -37,6 +37,7 @@ class HardwareConfig2D:
     FREQ_MHZ: float = 200.0
     CYCLE_MAC: int = 1        
     CYCLE_DRAM_RD: int = 1    
+    CYCLE_SRAM_RD: int = 1
 
 class SimulationStats:
     def __init__(self):

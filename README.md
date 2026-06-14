@@ -27,37 +27,58 @@ The objective is to compare the following dataflow strategies under the same har
 
 ## 3. Hardware Architecture
 
-### Processing Element (PE) Array
-- `PE_ROWS = 16`
-- `PE_COLS = 16`
+### 3.1 Processing Element (PE) Array
+Hệ thống sử dụng một ma trận đơn vị xử lý (PE Array) với kích thước:
+- `PE_ROWS = 16` (16 hàng)
+- `PE_COLS = 16` (16 cột)
 
-**PE Internal Structure:**
+**Cấu trúc bên trong một PE (Processing Element):**
+Mỗi PE là một đơn vị tính toán độc lập, bao gồm 1 bộ nhân cộng (MAC) và 3 thanh ghi (Registers) lưu trữ cục bộ. Nhiệm vụ của chúng sẽ thay đổi tùy thuộc vào Dataflow:
+
 ```text
-PE
-├── Weight Register
-├── Input Register
-├── Accumulator Register
-└── MAC Unit
+Processing Element (PE)
+│
+├── [ Weight Register ]       <-- Giữ Trọng số. Trong chế độ Weight Stationary (WS), thanh ghi này sẽ "khóa" lại, không cần đọc lại SRAM.
+├── [ Input Register ]        <-- Giữ Đầu vào. Trong chế độ Input Stationary (IS), thanh ghi này sẽ bị "khóa".
+├── [ Accumulator Register ]  <-- Giữ Tổng riêng phần (Psum). Trong chế độ Output Stationary (OS), nó cộng dồn liên tục mà không đẩy ra ngoài.
+│
+└── ⚡ MAC Unit               <-- Khối tính toán cốt lõi. Thực hiện: Accumulator = (Weight × Input) + Accumulator
 ```
 
-### Memory Hierarchy
+### 3.2 Memory Hierarchy & Ping-Pong SRAM (Double Buffering)
+
+Hệ thống bộ nhớ chia làm DRAM (chậm, dung lượng lớn) và SRAM (nhanh, dung lượng nhỏ, cấp dữ liệu trực tiếp cho PE).
+
 ```text
-DRAM
- ├── Weight Buffer (Implemented as PingPongSRAM)
- ├── Input Buffer (Implemented as PingPongSRAM)
- └── Output Buffer
+DRAM (Bộ nhớ chính)
+ │
+ ├──> 🏓 Weight Buffer (PingPongSRAM) ---> [ PE Array ]
+ ├──> 🏓 Input Buffer (PingPongSRAM)  ---> [ PE Array ]
+ └──< Output Buffer (SRAM thường)     <--- [ PE Array ]
 ```
 
-**Ping-Pong Buffering (Double Buffering):**
-To optimize execution cycles and hide DRAM latency, both the Weight Buffer and Input Buffer are physically implemented using `PingPongSRAM`. This double-buffering architecture allows the PE array to continuously compute data from `SRAM_0` while new data is pre-fetched from DRAM into `SRAM_1` (and vice versa).
+**Tại sao phải dùng PingPongSRAM?**
+Đọc dữ liệu từ DRAM tốn hàng chục chu kỳ. Nếu PE Array phải đợi DRAM, hệ thống sẽ bị "Stall" (treo chờ). Giải pháp là dùng **Ping-Pong Buffering (Double Buffering)**.
 
-### Data Path Overview
+**Cơ chế hoạt động của Ping-Pong SRAM:**
+Mỗi khối PingPongSRAM thực chất gồm **2 băng nhớ SRAM giống hệt nhau** (gọi là `Bank 0` - Ping, và `Bank 1` - Pong). Chúng hoạt động song song theo nguyên lý:
 
-The physical architecture remains unchanged for all experiments; only the dataflow policy is modified.
+1. **Chu kỳ 1 (Ping compute, Pong load):** 
+   - PE Array đọc dữ liệu có sẵn từ `Bank 0` để tính toán.
+   - Cùng lúc đó ở background, hệ thống âm thầm nạp khối dữ liệu tiếp theo từ DRAM vào `Bank 1`.
+2. **Chu kỳ 2 (Pong compute, Ping load):**
+   - Khi tính xong, công tắc đảo chiều! PE Array lập tức chuyển sang đọc từ `Bank 1` (đã nạp sẵn).
+   - Hệ thống lại âm thầm nạp dữ liệu mới vào `Bank 0`.
 
-- **Weight Path:** `DRAM → Weight PingPongSRAM (Prefetch) → PE Array (Compute)`
-- **Input Path:** `DRAM → Input PingPongSRAM (Prefetch) → PE Array (Compute)`
-- **Output Path:** `PE Array → Adder Tree → Output Buffer → DRAM`
+**Tác dụng:** PE Array làm việc liên tục không ngừng nghỉ. Độ trễ (latency) chậm chạp của DRAM bị "che giấu" hoàn toàn bởi quá trình tính toán của PE.
+
+### 3.3 Data Path Overview
+
+Cấu trúc phần cứng cố định này sẽ chạy 4 chiến lược luân chuyển dữ liệu (Dataflow) khác nhau:
+
+- **Đường Weight:** `DRAM → Weight PingPongSRAM (Nạp ngầm) → PE Array (Tính toán)`
+- **Đường Input:** `DRAM → Input PingPongSRAM (Nạp ngầm) → PE Array (Tính toán)`
+- **Đường Output:** `PE Array → Cây cộng (Adder Tree) → Output Buffer → DRAM`
 
 ---
 
